@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NexTech Industries – Flota Espacial 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js" crossorigin="anonymous"></script>
+<style>
+  :root{
+    --bg:#020509;--panel:#070d17;
+    --accent:#00d4ff;--accent2:#c77dff;--accent3:#00ff88;
+    --orange:#ff8c42;--text:#e8f4f8;--muted:#4a7a9b;
+    --border:rgba(0,212,255,0.14);--glow:0 0 22px rgba(0,212,255,0.35);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;min-height:100vh;overflow-x:hidden;}
+  #stars{position:fixed;inset:0;pointer-events:none;z-index:0;}
+  .wrap{position:relative;z-index:1;}
+
+  header{text-align:center;padding:18px 16px 6px;border-bottom:1px solid rgba(0,212,255,0.07);}
+  .brand-row{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:3px;}
+  .bdot{width:8px;height:8px;background:var(--accent);border-radius:50%;box-shadow:0 0 12px var(--accent);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.65)}}
+  h1{font-family:'Orbitron',monospace;font-size:clamp(1.3rem,5vw,2.3rem);font-weight:900;letter-spacing:.12em;
+    background:linear-gradient(120deg,#fff 0%,var(--accent) 50%,var(--accent2) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-transform:uppercase;}
+  .tagline{font-size:.66rem;color:var(--muted);letter-spacing:.22em;text-transform:uppercase;}
+  .tagline em{color:var(--accent);font-style:italic;}
+
+  /* ── GESTURE GUIDE ── */
+  .gbar{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:8px 12px;border-bottom:1px solid rgba(0,212,255,0.05);}
+  .gest{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.025);
+    border:1px solid rgba(0,212,255,0.1);border-radius:20px;padding:4px 11px;
+    font-size:.58rem;color:var(--muted);white-space:nowrap;}
+  .gest .ico{font-size:.9rem;}
+  .gest strong{color:var(--accent);}
+
+  /* ── CONTROLS ── */
+  .controls{display:flex;justify-content:center;gap:8px;padding:8px 12px;}
+  .btn{font-family:'Orbitron',monospace;font-size:.56rem;letter-spacing:.08em;padding:7px 15px;
+    border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);
+    cursor:pointer;transition:all .2s;text-transform:uppercase;}
+  .btn:hover,.btn.on{background:var(--accent);color:#000;box-shadow:var(--glow);}
+  .btn.b2{border-color:var(--accent2);color:var(--accent2);}
+  .btn.b2:hover,.btn.b2.on{background:var(--accent2);color:#000;box-shadow:0 0 22px rgba(199,125,255,.35);}
+  .btn.b3{border-color:var(--accent3);color:var(--accent3);}
+  .btn.b3:hover,.btn.b3.on{background:var(--accent3);color:#000;}
+
+  /* ── HUD ── */
+  #hud{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-family:'Orbitron',monospace;font-size:clamp(.85rem,3.5vw,1.4rem);
+    color:var(--accent3);letter-spacing:.12em;text-transform:uppercase;
+    text-shadow:0 0 20px var(--accent3);pointer-events:none;z-index:300;
+    opacity:0;transition:opacity .25s;background:rgba(0,0,0,.65);padding:11px 22px;
+    border-radius:10px;border:1px solid rgba(0,255,136,.2);}
+  #hud.show{opacity:1;}
+
+  /* ── VIDEO ── */
+  #vcam{position:fixed;bottom:10px;right:10px;width:130px;height:98px;border-radius:10px;
+    overflow:hidden;border:1px solid var(--accent);box-shadow:var(--glow);z-index:100;display:none;}
+  #vcam.on{display:block;}
+  #vvid{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;position:absolute;}
+  #vcnv{width:100%;height:100%;transform:scaleX(-1);position:absolute;inset:0;}
+
+  /* Gesture indicator overlay on video */
+  #gind{position:fixed;bottom:112px;right:10px;font-family:'Orbitron',monospace;font-size:.5rem;
+    color:var(--accent3);letter-spacing:.07em;text-align:right;z-index:101;
+    opacity:0;transition:opacity .3s;padding:4px 7px;background:rgba(0,0,0,.5);
+    border-radius:5px;border:1px solid rgba(0,255,136,.15);}
+  #gind.show{opacity:1;}
+
+  /* ── HAND CURSOR ── */
+  #hcur{position:fixed;border-radius:50%;border:2px solid var(--accent3);
+    background:rgba(0,255,136,.1);pointer-events:none;z-index:200;
+    transform:translate(-50%,-50%);display:none;
+    box-shadow:0 0 14px rgba(0,255,136,.35);
+    transition:width .12s,height .12s,background .12s,border-color .12s;}
+  #hcur{width:26px;height:26px;}
+  #hcur.move {width:26px;height:26px;border-color:var(--accent3);background:rgba(0,255,136,.1);}
+  #hcur.zoom {width:18px;height:18px;border-color:var(--accent);background:rgba(0,212,255,.25);box-shadow:0 0 14px rgba(0,212,255,.5);}
+  #hcur.peace{width:36px;height:36px;border-color:var(--accent2);background:rgba(199,125,255,.2);box-shadow:0 0 16px rgba(199,125,255,.5);}
+  #hcur.thumb{width:40px;height:40px;border-color:var(--accent3);background:rgba(0,255,136,.15);box-shadow:0 0 18px rgba(0,255,136,.5);}
+
+  /* ── GRID ── */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px 12px 18px;max-width:940px;margin:0 auto;}
+  @media(max-width:500px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;overflow:hidden;
+    display:flex;flex-direction:column;transition:border-color .35s,box-shadow .35s;}
+  .card.sel {border-color:rgba(0,212,255,.5);box-shadow:0 0 32px rgba(0,212,255,.12);}
+  .card.sel2{border-color:rgba(199,125,255,.5);box-shadow:0 0 32px rgba(199,125,255,.12);}
+
+  .canwrap{width:100%;aspect-ratio:1/1.5;position:relative;cursor:grab;touch-action:none;overflow:hidden;}
+  .canwrap:active{cursor:grabbing;}
+  .canwrap canvas{width:100%!important;height:100%!important;display:block;}
+
+  .sdot{position:absolute;top:8px;right:8px;width:9px;height:9px;border-radius:50%;
+    background:var(--muted);transition:all .2s;z-index:4;}
+  .card.sel  .sdot{background:var(--accent);box-shadow:0 0 8px var(--accent);}
+  .card.sel2 .sdot{background:var(--accent2);box-shadow:0 0 8px var(--accent2);}
+
+  .hint{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);font-size:.5rem;
+    color:var(--muted);letter-spacing:.1em;background:rgba(0,0,0,.5);padding:2px 8px;
+    border-radius:4px;white-space:nowrap;pointer-events:none;opacity:.5;z-index:3;}
+
+  .sbtn{position:absolute;bottom:7px;left:7px;z-index:5;font-family:'Orbitron',monospace;
+    font-size:.44rem;text-transform:uppercase;padding:4px 8px;border-radius:4px;cursor:pointer;
+    letter-spacing:.06em;border:1px solid rgba(255,140,66,.35);background:rgba(0,0,0,.6);
+    color:var(--orange);transition:all .2s;}
+  .sbtn:hover{background:var(--orange);color:#000;border-color:var(--orange);}
+  .sbtn.sep{border-color:rgba(0,255,136,.4);color:var(--accent3);}
+  .sbtn.sep:hover{background:var(--accent3);color:#000;}
+
+  .info{padding:11px 14px 14px;border-top:1px solid var(--border);flex:1;}
+  .rname{font-family:'Orbitron',monospace;font-size:.86rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px;}
+  .lite  .rname{color:var(--accent);}
+  .heavy .rname{color:var(--accent2);}
+  .tag{display:inline-block;font-size:.5rem;padding:2px 7px;border-radius:3px;letter-spacing:.12em;
+    text-transform:uppercase;margin-bottom:7px;font-weight:600;}
+  .tg{background:rgba(0,255,136,.1);color:var(--accent3);border:1px solid rgba(0,255,136,.22);}
+  .tp{background:rgba(199,125,255,.1);color:var(--accent2);border:1px solid rgba(199,125,255,.2);}
+  .desc{font-size:.69rem;line-height:1.56;color:#7ea8c0;margin-bottom:9px;}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+  .stat{background:rgba(0,212,255,.03);border:1px solid rgba(0,212,255,.09);border-radius:6px;padding:5px 8px;}
+  .sl{font-size:.46rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:1px;}
+  .sv{font-family:'Orbitron',monospace;font-size:.63rem;font-weight:700;color:var(--text);}
+
+  footer{text-align:center;padding:10px;font-size:.55rem;color:var(--muted);letter-spacing:.1em;}
+
+  #loader{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;transition:opacity .5s;}
+  #loader.out{opacity:0;pointer-events:none;}
+  .lring{width:44px;height:44px;border:2px solid var(--border);border-top-color:var(--accent);
+    border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ltxt{font-family:'Orbitron',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.2em;}
+
+  /* ══ CPM SECTION ══ */
+  .cpm-section{max-width:940px;margin:0 auto;padding:0 12px 32px;}
+  .cpm-header{text-align:center;padding:28px 0 16px;border-top:1px solid rgba(0,212,255,0.1);margin-top:4px;}
+  .cpm-header h2{font-family:'Orbitron',monospace;font-size:clamp(1rem,4vw,1.55rem);font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;
+    background:linear-gradient(120deg,var(--accent) 0%,var(--accent2) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:5px;}
+  .cpm-header p{font-size:.68rem;color:var(--muted);letter-spacing:.1em;}
+  .cpm-tabs{display:flex;gap:8px;margin-bottom:14px;justify-content:center;}
+  .ctab{font-family:'Orbitron',monospace;font-size:.55rem;letter-spacing:.08em;padding:7px 18px;
+    border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);
+    cursor:pointer;transition:all .2s;text-transform:uppercase;}
+  .ctab.active{background:rgba(0,212,255,.1);border-color:var(--accent);color:var(--accent);}
+  .cpm-panel{display:none;animation:fadeIn .3s ease;}
+  .cpm-panel.active{display:block;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .cpm-intro{background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.1);border-radius:12px;
+    padding:13px 15px;margin-bottom:13px;font-size:.69rem;color:#8abbc8;line-height:1.6;}
+  .cpm-intro strong{color:var(--accent);}
+  .cpm-subtitle{font-family:'Orbitron',monospace;font-size:.63rem;color:var(--accent);
+    letter-spacing:.1em;text-transform:uppercase;margin:14px 0 8px;display:flex;align-items:center;gap:8px;}
+  .cpm-subtitle::after{content:'';flex:1;height:1px;background:var(--border);}
+  .cpm-table{width:100%;border-collapse:collapse;font-size:.67rem;margin-bottom:4px;}
+  .cpm-table th{font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--border);text-align:left;}
+  .cpm-table td{padding:7px 10px;border-bottom:1px solid rgba(0,212,255,.05);color:var(--text);vertical-align:middle;}
+  .cpm-table tr:last-child td{border-bottom:none;}
+  .cpm-table tr.crit-row td{background:rgba(0,255,136,.04);}
+  .cpm-table tr.crit-row td:first-child{border-left:2px solid var(--accent3);padding-left:8px;}
+  .badge{display:inline-block;font-size:.47rem;padding:2px 6px;border-radius:3px;
+    font-family:'Orbitron',monospace;letter-spacing:.06em;text-transform:uppercase;font-weight:700;}
+  .badge.crit{background:rgba(0,255,136,.12);color:var(--accent3);border:1px solid rgba(0,255,136,.28);}
+  .badge.no{background:rgba(74,122,155,.1);color:var(--muted);border:1px solid rgba(74,122,155,.18);}
+  .network-wrap{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:12px;
+    padding:14px;margin-bottom:13px;overflow-x:auto;}
+  .network-wrap svg{display:block;margin:0 auto;max-width:100%;height:auto;}
+  .routes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:8px;margin-bottom:4px;}
+  .route-card{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;transition:all .2s;}
+  .route-card.cr{border-color:rgba(0,255,136,.4);background:rgba(0,255,136,.04);box-shadow:0 0 14px rgba(0,255,136,.07);}
+  .route-path{font-family:'Orbitron',monospace;font-size:.66rem;color:var(--text);margin-bottom:3px;letter-spacing:.04em;}
+  .route-card.cr .route-path{color:var(--accent3);}
+  .route-dur{font-size:.61rem;color:var(--muted);}
+  .route-card.cr .route-dur{color:var(--accent3);}
+  .critical-box{background:linear-gradient(120deg,rgba(0,255,136,.07),rgba(0,212,255,.04));
+    border:1px solid rgba(0,255,136,.28);border-radius:12px;padding:13px 16px;margin:13px 0;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .critical-box .cico{font-size:1.7rem;flex-shrink:0;}
+  .critical-box h3{font-family:'Orbitron',monospace;font-size:.75rem;color:var(--accent3);
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
+  .critical-box p{font-size:.67rem;color:#8abbc8;line-height:1.5;}
+  .critical-box strong{color:var(--accent);}
+  .step-controls{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .step-btn{font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:.07em;padding:5px 11px;
+    border-radius:5px;border:1px solid var(--accent);background:transparent;color:var(--accent);
+    cursor:pointer;transition:all .2s;text-transform:uppercase;}
+  .step-btn:hover{background:var(--accent);color:#000;}
+  .step-btn:disabled{opacity:.3;cursor:not-allowed;}
+  .step-lbl{font-family:'Orbitron',monospace;font-size:.5rem;color:var(--muted);letter-spacing:.06em;}
+  .highlight{animation:hlPulse .6s ease;}
+  @keyframes hlPulse{0%{opacity:.3}50%{opacity:1}100%{opacity:1}}
+</style>
+</head>
+<body>
+<div id="loader"><div class="lring"></div><div class="ltxt">NEXTECH INDUSTRIES — INITIALIZING...</div></div>
+<canvas id="stars"></canvas>
+<div id="hcur"></div>
+<div id="hud"></div>
+<div id="gind"></div>
+<div id="vcam"><video id="vvid" playsinline></video><canvas id="vcnv"></canvas></div>
+
+<div class="wrap">
+  <header>
+    <div class="brand-row"><div class="bdot"></div><h1>NexTech Industries</h1><div class="bdot"></div></div>
+    <p class="tagline">Flota Espacial · <em>Explorador 3D Interactivo</em></p>
+  </header>
+
+  <div class="gbar">
+    <div class="gest"><span class="ico">✋</span><span>Mover palma → <strong>Rotar</strong></span></div>
+    <div class="gest"><span class="ico">☝️</span><span>Un dedo → <strong>Zoom</strong></span></div>
+    <div class="gest"><span class="ico">✌️</span><span>Dos dedos → <strong>Separar etapa</strong></span></div>
+    <div class="gest"><span class="ico">👍</span><span>Pulgar arriba → <strong>Reset</strong></span></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn on" id="bnxl" onclick="setActive(0)">◈ NX-Lite</button>
+    <button class="btn b2"  id="bnxh" onclick="setActive(1)">◈ NX-Heavy</button>
+    <button class="btn b3"  id="bcam" onclick="toggleCam()">⬡ Activar Mano</button>
+  </div>
+
+  <div class="grid">
+    <div class="card sel lite" id="card0">
+      <div class="canwrap" id="w0">
+        <div class="sdot"></div>
+        <div class="hint">← ARRASTRA →</div>
+        <button class="sbtn" id="sb0" onclick="toggleStage(0)">SEPARAR ETAPA</button>
+      </div>
+      <div class="info">
+        <div class="rname">NX-Lite</div>
+        <span class="tag tg">⬤ Órbita Baja / LEO</span>
+        <p class="desc">Vehículo de lanzamiento de clase media para despliegue rápido en LEO. Su estructura octagonal facetada reduce la resistencia atmosférica un 18% frente a diseños cilíndricos convencionales.</p>
+        <div class="stats">
+          <div class="stat"><div class="sl">Misión</div><div class="sv">Carga Ligera</div></div>
+          <div class="stat"><div class="sl">Ensamblaje</div><div class="sv">4 hrs/unidad</div></div>
+          <div class="stat"><div class="sl">Certificación</div><div class="sv">2 hrs/unidad</div></div>
+          <div class="stat"><div class="sl">Utilidad</div><div class="sv">$50,000</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card heavy" id="card1">
+      <div class="canwrap" id="w1">
+        <div class="sdot"></div>
+        <div class="hint">← ARRASTRA →</div>
+        <button class="sbtn" id="sb1" onclick="toggleStage(1)">SEPARAR ETAPA</button>
+      </div>
+      <div class="info">
+        <div class="rname">NX-Heavy</div>
+        <span class="tag tp">⬤ Órbita Alta / GEO</span>
+        <p class="desc">Sistema de lanzamiento pesado de configuración dual-core con anillo de aceleración de plasma. Genera el mayor impulso específico de la flota NexTech para misiones GEO e interplanetarias.</p>
+        <div class="stats">
+          <div class="stat"><div class="sl">Misión</div><div class="sv">Carga Pesada</div></div>
+          <div class="stat"><div class="sl">Ensamblaje</div><div class="sv">6 hrs/unidad</div></div>
+          <div class="stat"><div class="sl">Certificación</div><div class="sv">5 hrs/unidad</div></div>
+          <div class="stat"><div class="sl">Utilidad</div><div class="sv">$80,000</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer>NexTech Industries © 2025 · Control Gestual IA · Flota LEO / GEO</footer>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// STARS + NEBULA
+// ══════════════════════════════════════════
+(function(){
+  const c=document.getElementById('stars'),ctx=c.getContext('2d');
+  let S=[],N=[];
+  function rs(){
+    c.width=innerWidth;c.height=innerHeight;S=[];N=[];
+    for(let i=0;i<240;i++) S.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.4,a:Math.random(),s:Math.random()*.007+.001,h:Math.random()<.15?190:220});
+    for(let i=0;i<5;i++)   N.push({x:Math.random()*c.width,y:Math.random()*c.height,r:80+Math.random()*160,h:Math.random()<.5?200:270,a:.035+Math.random()*.04});
+  }
+  function dr(){
+    ctx.clearRect(0,0,c.width,c.height);
+    N.forEach(n=>{const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r);g.addColorStop(0,`hsla(${n.h},80%,60%,${n.a})`);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);ctx.fill();});
+    S.forEach(s=>{s.a+=s.s;if(s.a>1)s.a=0;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`hsla(${s.h},60%,90%,${s.a*.85})`;ctx.fill();});
+    requestAnimationFrame(dr);
+  }
+  addEventListener('resize',rs);rs();dr();
+})();
+
+// ══════════════════════════════════════════
+// HELPER
+// ══════════════════════════════════════════
+function M(geo,mat,x=0,y=0,z=0){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);return m;}
+
+// ══════════════════════════════════════════
+// NX-LITE  — stages joined at y=0 pivot
+// S1 occupies  y: -2.05 → 0  (bottom)
+// S2 occupies  y:  0    → +2.3 (top)
+// joinY = 0  (the seam between stages)
+// ══════════════════════════════════════════
+function buildNXLite(scene){
+  const G=new THREE.Group();
+  const S1=new THREE.Group();
+  const S2=new THREE.Group();
+
+  const hull =new THREE.MeshPhongMaterial({color:0x0d2a3a,shininess:180,specular:0x00aaff});
+  const panel=new THREE.MeshPhongMaterial({color:0x142838,shininess:100,specular:0x006688});
+  const glow =new THREE.MeshPhongMaterial({color:0x00d4ff,emissive:0x00aaff,emissiveIntensity:.8});
+  const glow2=new THREE.MeshPhongMaterial({color:0x00ffcc,emissive:0x00ffcc,emissiveIntensity:.6});
+  const white=new THREE.MeshPhongMaterial({color:0xddeeff,shininess:220,specular:0xaaddff});
+  const dark =new THREE.MeshPhongMaterial({color:0x040c14,shininess:40});
+  const glass=new THREE.MeshPhongMaterial({color:0x00d4ff,transparent:true,opacity:.22,shininess:300,specular:0xffffff,emissive:0x003344,emissiveIntensity:.3});
+  const acc  =new THREE.MeshPhongMaterial({color:0x00ff88,emissive:0x00ff44,emissiveIntensity:.5});
+
+  // ── S2: y from 0 to +2.3 ──
+  // interstage collar (sits right at seam y=0)
+  S2.add(M(new THREE.CylinderGeometry(.285,.285,.12,8),dark,0,.06,0));
+  // sep glow ring at seam
+  const sepR=M(new THREE.TorusGeometry(.29,.022,8,40),glow,0,.06,0); sepR.rotation.x=Math.PI/2; S2.add(sepR);
+  // upper body
+  S2.add(M(new THREE.CylinderGeometry(.265,.285,1.1,8),white,0,.73,0));
+  // vertical panel lines on upper body
+  for(let i=0;i<8;i++){const a=i/8*Math.PI*2;S2.add(M(new THREE.BoxGeometry(.01,.95,.01),glow,Math.cos(a)*.278,.73,Math.sin(a)*.278));}
+  // mid band
+  S2.add(M(new THREE.CylinderGeometry(.28,.28,.055,8),glow,0,1.34,0));
+  // fairing / payload zone
+  S2.add(M(new THREE.CylinderGeometry(.255,.268,.65,8),panel,0,1.72,0));
+  // dome top
+  S2.add(M(new THREE.SphereGeometry(.258,32,16,0,Math.PI*2,0,Math.PI*.58),glass,0,2.07,0));
+  // dome glow ring
+  const dR=M(new THREE.TorusGeometry(.258,.018,8,32),glow,0,2.06,0); dR.rotation.x=Math.PI/2; S2.add(dR);
+  // nav light green
+  const navG=M(new THREE.SphereGeometry(.024,8,8),acc,0,2.0,.252); navG.userData.nav=true; S2.add(navG);
+
+  // ── S1: y from 0 down to -2.05 ──
+  // main body (octagonal, from seam at 0 down to -1.6)
+  S1.add(M(new THREE.CylinderGeometry(.285,.315,1.65,8),hull,0,-.825,0));
+  // vertical glow stripes
+  for(let i=0;i<8;i++){const a=i/8*Math.PI*2+(Math.PI/8);S1.add(M(new THREE.BoxGeometry(.01,1.5,.01),i%2===0?glow:panel,Math.cos(a)*.302,-.825,Math.sin(a)*.302));}
+  // mid ring
+  const mR=M(new THREE.CylinderGeometry(.305,.305,.055,8),glow,0,-.6,0); S1.add(mR);
+  // lower ring
+  const lR=M(new THREE.CylinderGeometry(.315,.315,.05,8),glow,0,-1.38,0); S1.add(lR);
+  // 4 swept delta fins — base at -1.65, sweeping down
+  for(let i=0;i<4;i++){
+    const a=i/4*Math.PI*2;
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array([0,0,0, 0,.95,0, .3,0,0]),3));
+    geo.setIndex([0,2,1,1,2,0]); geo.computeVertexNormals();
+    const fin=new THREE.Mesh(geo,white);
+    fin.position.set(Math.cos(a)*.30,-1.65,Math.sin(a)*.30);
+    fin.rotation.y=-a+Math.PI/2; S1.add(fin);
+    // fin glow edge
+    S1.add(M(new THREE.BoxGeometry(.011,.88,.01),glow,Math.cos(a)*.37,-1.65+.44,Math.sin(a)*.37));
+  }
+  // engine section
+  S1.add(M(new THREE.CylinderGeometry(.285,.335,.28,8),dark,0,-1.79,0));
+  // engine toroidal ring
+  const eR=M(new THREE.TorusGeometry(.215,.058,12,32),dark,0,-2.0,0); eR.rotation.x=Math.PI/2; S1.add(eR);
+  const eG=M(new THREE.TorusGeometry(.215,.024,8,32),glow,0,-2.0,0); eG.rotation.x=Math.PI/2; eG.userData.eGlow=true; S1.add(eG);
+  // 6 nozzles
+  for(let i=0;i<6;i++){const a=i/6*Math.PI*2;S1.add(M(new THREE.CylinderGeometry(.024,.038,.16,8),dark,Math.cos(a)*.175,-2.12,Math.sin(a)*.175));}
+  S1.add(M(new THREE.CylinderGeometry(.028,.046,.16,8),dark,0,-2.12,0));
+  // FLAMES — blue/cyan plasma
+  const fMat =new THREE.MeshBasicMaterial({color:0x00aaff,transparent:true,opacity:.75});
+  const fMat2=new THREE.MeshBasicMaterial({color:0x00ffee,transparent:true,opacity:.5});
+  const flame =M(new THREE.ConeGeometry(.175,.65,12),fMat,0,-2.47,0); flame.rotation.x=Math.PI; S1.add(flame);
+  const flame2=M(new THREE.ConeGeometry(.085,.38,12),fMat2,0,-2.57,0); flame2.rotation.x=Math.PI; S1.add(flame2);
+
+  // Assemble — S2 sits on S1 at y=0 seam
+  S2.position.y=0;
+  S1.position.y=0;
+  G.add(S1); G.add(S2);
+  G.scale.set(.68,.68,.68);
+  // Center vertically: total height ≈ 4.35, center ≈ +0.1
+  G.position.y=-.1;
+  scene.add(G);
+
+  scene.userData.rocketGroup=G;
+  scene.userData.S1=S1; scene.userData.S2=S2;
+  scene.userData.S1base=0; scene.userData.S2base=0;
+  scene.userData.flame=flame; scene.userData.flame2=flame2;
+  scene.userData.fMat=fMat; scene.userData.fMat2=fMat2;
+  scene.userData.eGlow=eG; scene.userData.navG=navG;
+  scene.userData.separated=false; scene.userData.sepP=0;
+  return G;
+}
+
+// ══════════════════════════════════════════
+// NX-HEAVY  — stages joined at y=0
+// S1 (dual boosters) y: -2.2 → 0
+// S2 (command)       y:  0   → +2.6
+// ══════════════════════════════════════════
+function buildNXHeavy(scene){
+  const G=new THREE.Group();
+  const S1=new THREE.Group();
+  const S2=new THREE.Group();
+
+  const hull =new THREE.MeshPhongMaterial({color:0x1a0d2e,shininess:160,specular:0x9944ff});
+  const armor=new THREE.MeshPhongMaterial({color:0x120922,shininess:80});
+  const glow =new THREE.MeshPhongMaterial({color:0xc77dff,emissive:0x9933ff,emissiveIntensity:.8});
+  const glow2=new THREE.MeshPhongMaterial({color:0xff8c42,emissive:0xff5500,emissiveIntensity:.7});
+  const white=new THREE.MeshPhongMaterial({color:0xd0c8e8,shininess:200,specular:0xaa88ff});
+  const dark =new THREE.MeshPhongMaterial({color:0x050210,shininess:30});
+  const glass=new THREE.MeshPhongMaterial({color:0xc77dff,transparent:true,opacity:.2,shininess:300,specular:0xffffff,emissive:0x220033,emissiveIntensity:.4});
+  const ring =new THREE.MeshPhongMaterial({color:0xff8c42,emissive:0xff4400,emissiveIntensity:.9});
+
+  // ── S2: y from 0 to +2.6 ──
+  // plasma separator ring at seam
+  const pSep=M(new THREE.TorusGeometry(.41,.024,8,48),glow,0,.03,0); pSep.rotation.x=Math.PI/2; S2.add(pSep);
+  const pSep2=M(new THREE.TorusGeometry(.36,.014,8,40),ring,0,.03,0); pSep2.rotation.x=Math.PI/2; pSep2.userData.spin=true; S2.add(pSep2);
+  // command hull (tapered hex)
+  S2.add(M(new THREE.CylinderGeometry(.175,.38,1.85,6),white,0,1.0,0));
+  // hex panel lines
+  for(let i=0;i<6;i++){const a=i/6*Math.PI*2;S2.add(M(new THREE.BoxGeometry(.008,1.65,.008),glow,Math.cos(a)*.19,1.0,Math.sin(a)*.19));}
+  // nose
+  S2.add(M(new THREE.ConeGeometry(.175,.55,6),white,0,2.0,0));
+  // glass dome on nose
+  S2.add(M(new THREE.SphereGeometry(.178,16,8,0,Math.PI*2,0,Math.PI*.55),glass,0,1.78,0));
+  // two sensor pods
+  [-1,1].forEach(s=>{
+    const pod=new THREE.Group();
+    pod.add(M(new THREE.CylinderGeometry(.068,.088,.78,8),armor,0,0,0));
+    pod.add(M(new THREE.ConeGeometry(.068,.24,8),white,0,.51,0));
+    pod.add(M(new THREE.CylinderGeometry(.073,.073,.038,8),glow,0,-.14,0));
+    pod.position.set(s*.52,.82,0); S2.add(pod);
+    S2.add(M(new THREE.BoxGeometry(.3,.028,.028),armor,s*.22,.82,0));
+  });
+  // nav light red
+  const navR=M(new THREE.SphereGeometry(.022,8,8),new THREE.MeshPhongMaterial({color:0xff3333,emissive:0xff0000,emissiveIntensity:.8}),.5,.72,0);
+  navR.userData.nav=true; S2.add(navR);
+
+  // ── S1: dual boosters y from 0 down to -2.2 ──
+  [-1,1].forEach(s=>{
+    const core=new THREE.Group();
+    core.add(M(new THREE.CylinderGeometry(.175,.215,2.25,6),hull,0,-1.125,0));
+    for(let i=0;i<6;i++){const a=i/6*Math.PI*2;core.add(M(new THREE.BoxGeometry(.007,2.1,.007),i%2===0?glow:armor,Math.cos(a)*.185,-1.125,Math.sin(a)*.185));}
+    // top collar flush with seam
+    core.add(M(new THREE.CylinderGeometry(.195,.175,.09,6),dark,0,-.045,0));
+    // glow band
+    core.add(M(new THREE.CylinderGeometry(.19,.19,.042,6),glow,0,-.5,0));
+    // engine bell
+    core.add(M(new THREE.CylinderGeometry(.175,.235,.24,8),dark,0,-2.37,0));
+    // 3 nozzles
+    for(let i=0;i<3;i++){const a=i/3*Math.PI*2;core.add(M(new THREE.CylinderGeometry(.028,.048,.19,8),dark,Math.cos(a)*.085,-2.55,Math.sin(a)*.085));}
+    core.position.set(s*.37,0,0);
+    S1.add(core);
+  });
+  // spine beams connecting boosters
+  S1.add(M(new THREE.BoxGeometry(.56,.07,.1),armor,0,-.15,0));
+  S1.add(M(new THREE.BoxGeometry(.56,.045,.08),glow,0,-.52,0));
+  S1.add(M(new THREE.BoxGeometry(.56,.038,.07),glow,0,-1.1,0));
+  // plasma ring (center, dramatic)
+  const pRing=M(new THREE.TorusGeometry(.27,.042,12,48),ring,0,-1.38,0); pRing.rotation.x=Math.PI/2; pRing.userData.pRing=true; S1.add(pRing);
+  const iRing=M(new THREE.TorusGeometry(.17,.018,8,40),glow,0,-1.38,0); iRing.rotation.x=Math.PI/2; iRing.userData.spin=true; S1.add(iRing);
+  // 4 swept wings
+  [0,1,2,3].forEach(i=>{
+    const a=i/4*Math.PI*2+Math.PI/4;
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array([0,0,0, 0,.92,0, .42,-.06,0]),3));
+    geo.setIndex([0,1,2,2,1,0]); geo.computeVertexNormals();
+    const w=new THREE.Mesh(geo,white);
+    w.position.set(Math.cos(a)*.38,-.85,Math.sin(a)*.38);
+    w.rotation.y=-a+Math.PI/2; S1.add(w);
+    S1.add(M(new THREE.BoxGeometry(.01,.86,.008),glow,Math.cos(a)*.49,-.85+.43,Math.sin(a)*.49));
+  });
+  // FLAMES — orange plasma, one per booster
+  const fMat =new THREE.MeshBasicMaterial({color:0xff6600,transparent:true,opacity:.8});
+  const fMat2=new THREE.MeshBasicMaterial({color:0xffcc00,transparent:true,opacity:.5});
+  const flames=[],flames2=[];
+  [-1,1].forEach(s=>{
+    const fl=M(new THREE.ConeGeometry(.125,.58,10),fMat,s*.37,-2.81,0); fl.rotation.x=Math.PI; S1.add(fl); flames.push(fl);
+    const fl2=M(new THREE.ConeGeometry(.062,.34,10),fMat2,s*.37,-2.95,0); fl2.rotation.x=Math.PI; S1.add(fl2); flames2.push(fl2);
+  });
+
+  S1.position.y=0; S2.position.y=0;
+  G.add(S1); G.add(S2);
+  G.scale.set(.63,.63,.63);
+  G.position.y=-.05;
+  scene.add(G);
+
+  scene.userData.rocketGroup=G;
+  scene.userData.S1=S1; scene.userData.S2=S2;
+  scene.userData.S1base=0; scene.userData.S2base=0;
+  scene.userData.flames=flames; scene.userData.flames2=flames2;
+  scene.userData.fMat=fMat; scene.userData.fMat2=fMat2;
+  scene.userData.pRing=pRing; scene.userData.navR=navR;
+  scene.userData.separated=false; scene.userData.sepP=0;
+  return G;
+}
+
+// ══════════════════════════════════════════
+// SCENE FACTORY
+// ══════════════════════════════════════════
+const scenes=[];
+let activeScene=0;
+
+function createScene(wid,builder){
+  const wrap=document.getElementById(wid);
+  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0,0);
+  wrap.appendChild(renderer.domElement);
+
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(42,1,.1,100);
+  camera.position.set(0,.1,6.0);
+
+  scene.add(new THREE.AmbientLight(0x0a1520,1.5));
+  const k=new THREE.DirectionalLight(0xffffff,3.0); k.position.set(3,4,3); scene.add(k);
+  const f=new THREE.DirectionalLight(0x0033aa,.9);  f.position.set(-3,0,-2); scene.add(f);
+  const r=new THREE.DirectionalLight(0x00aaff,1.2); r.position.set(0,-3,-3); scene.add(r);
+  const t2=new THREE.DirectionalLight(0xffffff,.7); t2.position.set(0,5,0); scene.add(t2);
+
+  // nebula sphere
+  scene.add(M(new THREE.SphereGeometry(5,16,16),new THREE.MeshBasicMaterial({color:wid==='w0'?0x001a2a:0x0d0020,transparent:true,opacity:.3,side:THREE.BackSide})));
+
+  builder(scene);
+
+  const ro=new ResizeObserver(()=>{
+    const w=wrap.clientWidth,h=wrap.clientHeight;
+    renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+  });
+  ro.observe(wrap);
+  const iw=wrap.clientWidth||300,ih=wrap.clientHeight||450;
+  renderer.setSize(iw,ih); camera.aspect=iw/ih; camera.updateProjectionMatrix();
+
+  const sd={renderer,scene,camera,
+    rX:0,rY:0,tRX:0,tRY:0,zoom:6.0,tZoom:6.0,
+    drag:false,lx:0,ly:0,breathe:0};
+
+  wrap.addEventListener('mousedown',e=>{sd.drag=true;sd.lx=e.clientX;sd.ly=e.clientY;});
+  addEventListener('mouseup',()=>sd.drag=false);
+  addEventListener('mousemove',e=>{
+    if(!sd.drag)return;
+    sd.tRY+=(e.clientX-sd.lx)*.013; sd.tRX+=(e.clientY-sd.ly)*.009;
+    sd.lx=e.clientX; sd.ly=e.clientY;
+  });
+  wrap.addEventListener('touchstart',e=>{sd.drag=true;sd.lx=e.touches[0].clientX;sd.ly=e.touches[0].clientY;},{passive:true});
+  wrap.addEventListener('touchend',()=>sd.drag=false,{passive:true});
+  wrap.addEventListener('touchmove',e=>{
+    if(!sd.drag)return;
+    sd.tRY+=(e.touches[0].clientX-sd.lx)*.015; sd.tRX+=(e.touches[0].clientY-sd.ly)*.011;
+    sd.lx=e.touches[0].clientX; sd.ly=e.touches[0].clientY;
+  },{passive:true});
+
+  return sd;
+}
+
+// ══════════════════════════════════════════
+// STAGE SEPARATION
+// ══════════════════════════════════════════
+function toggleStage(i){
+  const ud=scenes[i].scene.userData;
+  ud.separated=!ud.separated;
+  const b=document.getElementById('sb'+i);
+  b.textContent=ud.separated?'REUNIR ETAPA':'SEPARAR ETAPA';
+  b.classList.toggle('sep',ud.separated);
+  showHUD(ud.separated?'⬡ STAGE SEP':'⬡ JOINED');
+}
+function separateHand(i){
+  const ud=scenes[i].scene.userData;
+  if(!ud.separated){
+    ud.separated=true;
+    document.getElementById('sb'+i).textContent='REUNIR ETAPA';
+    document.getElementById('sb'+i).classList.add('sep');
+    showHUD('✌️ STAGE SEP');
+  }
+}
+function resetScene(i){
+  const sd=scenes[i],ud=sd.scene.userData;
+  ud.separated=false; sd.tRX=0; sd.tRY=0; sd.tZoom=6.0;
+  document.getElementById('sb'+i).textContent='SEPARAR ETAPA';
+  document.getElementById('sb'+i).classList.remove('sep');
+  showHUD('👍 RESET');
+}
+
+let hudT=null;
+function showHUD(msg){
+  const h=document.getElementById('hud');
+  h.textContent=msg; h.classList.add('show');
+  if(hudT)clearTimeout(hudT);
+  hudT=setTimeout(()=>h.classList.remove('show'),1600);
+}
+
+// ══════════════════════════════════════════
+// MAIN LOOP
+// ══════════════════════════════════════════
+window.addEventListener('load',()=>{
+  scenes[0]=createScene('w0',buildNXLite);
+  scenes[1]=createScene('w1',buildNXHeavy);
+
+  let t=0;
+  (function loop(){
+    requestAnimationFrame(loop); t+=.02;
+    scenes.forEach((sd,idx)=>{
+      sd.rX+=(sd.tRX-sd.rX)*.09; sd.rY+=(sd.tRY-sd.rY)*.09;
+      sd.zoom+=(sd.tZoom-sd.zoom)*.09; sd.camera.position.z=sd.zoom;
+      sd.camera.position.y=.1+Math.sin(t*.55+idx)*.015;
+      if(!sd.drag&&!handActive) sd.tRY+=.005;
+      const ud=sd.scene.userData;
+      ud.rocketGroup.rotation.x=sd.rX;
+      ud.rocketGroup.rotation.y=sd.rY;
+
+      // NX-LITE animations
+      if(idx===0){
+        if(ud.flame){
+          const fs=1+Math.sin(t*4.5)*.15+Math.random()*.05;
+          ud.flame.scale.set(fs,1+Math.sin(t*3)*.2+Math.random()*.08,fs);
+          ud.fMat.opacity=.62+Math.sin(t*5)*.2;
+          ud.flame2.scale.set(fs*.75,1+Math.sin(t*5.5)*.25,fs*.75);
+          ud.fMat2.opacity=.38+Math.sin(t*6)*.17;
+        }
+        if(ud.eGlow) ud.eGlow.material.emissiveIntensity=.5+Math.sin(t*3.5)*.3;
+        if(ud.navG)  ud.navG.material.emissiveIntensity=Math.sin(t*2.2)>.7?1:.08;
+      }
+
+      // NX-HEAVY animations
+      if(idx===1){
+        if(ud.flames){
+          const fs=1+Math.sin(t*4)*.18+Math.random()*.06;
+          ud.flames.forEach((fl,fi)=>{fl.scale.set(fs,1+Math.sin(t*3+fi*1.3)*.22+Math.random()*.09,fs);});
+          ud.fMat.opacity=.68+Math.sin(t*5)*.2;
+          ud.flames2.forEach((fl,fi)=>{fl.scale.set(fs*.65,1+Math.sin(t*5.5+fi)*.24,fs*.65);});
+          ud.fMat2.opacity=.38+Math.sin(t*6.2)*.17;
+        }
+        if(ud.pRing){ud.pRing.rotation.z=t*1.2; ud.pRing.material.emissiveIntensity=.7+Math.sin(t*4)*.28;}
+        if(ud.navR)  ud.navR.material.emissiveIntensity=Math.sin(t*2.6)>.6?1:.05;
+        ud.S2.traverse(o=>{if(o.userData.spin)o.rotation.z=t*.75;});
+      }
+
+      // Stage separation smooth lerp
+      const target=ud.separated?1:0;
+      ud.sepP+=(target-ud.sepP)*.048;
+      const p=ud.sepP;
+      if(ud.S2){
+        // S2 floats up, S1 drifts down
+        ud.S2.position.y=p*1.55;
+        ud.S1.position.y=-p*.28;
+        ud.S2.rotation.z=p*.08*Math.sin(t*.4);
+        ud.S2.rotation.x=p*.03*Math.cos(t*.3);
+      }
+
+      sd.renderer.render(sd.scene,sd.camera);
+    });
+  })();
+
+  setTimeout(()=>{document.getElementById('loader').classList.add('out');setTimeout(()=>document.getElementById('loader').remove(),600);},900);
+});
+
+function setActive(i){
+  activeScene=i;
+  document.getElementById('card0').className='card '+(i===0?'sel ':'')+'lite';
+  document.getElementById('card1').className='card '+(i===1?'sel2 ':'')+'heavy';
+  document.getElementById('bnxl').classList.toggle('on',i===0);
+  document.getElementById('bnxh').classList.toggle('on',i===1);
+}
+
+// ══════════════════════════════════════════
+// HAND TRACKING — new intuitive gestures
+// ✋ move palm  → rotate
+// ☝️ one finger → zoom (move up/down)
+// ✌️ two fingers (V) → separate stage
+// 👍 thumb up  → reset
+// ══════════════════════════════════════════
+let handActive=false,camInst=null,lpx=null,lpy=null,prevG='',gCnt=0;
+const GF=7; // frames to confirm gesture
+
+function classifyGesture(lm){
+  // fingertips: 4=thumb,8=index,12=middle,16=ring,20=pinky
+  // mcps:       2=thumb,5=index,9=middle,13=ring,17=pinky
+  const th=lm[4], ix=lm[8], mi=lm[12], ri=lm[16], pi=lm[20];
+  const thB=lm[2], ixB=lm[5], miB=lm[9], riB=lm[13], piB=lm[17];
+  const wrist=lm[0];
+
+  // Extended = fingertip clearly above its MCP (screen coords: smaller y = higher)
+  const ixUp = ix.y < ixB.y - 0.04;
+  const miUp = mi.y < miB.y - 0.04;
+  const riUp = ri.y < riB.y - 0.04;
+  const piUp = pi.y < piB.y - 0.04;
+  // Thumb up = thumb tip well above wrist, other fingers curled
+  const thUp = th.y < wrist.y - 0.12;
+  const thSide = Math.abs(th.x - wrist.x) > 0.08; // thumb sticking out sideways
+
+  // 👍 Thumb up: thumb extended upward, other 4 fingers curled
+  if(thUp && !ixUp && !miUp && !riUp && !piUp) return 'thumb';
+
+  // ✌️ Two fingers (V): index + middle up, rest curled
+  if(ixUp && miUp && !riUp && !piUp) return 'peace';
+
+  // ☝️ One finger: only index up
+  if(ixUp && !miUp && !riUp && !piUp) return 'one';
+
+  // ✋ Open / move: 3+ fingers up
+  return 'move';
+}
+
+function updateGestureIndicator(g){
+  const el=document.getElementById('gind');
+  const map={move:'✋ ROTAR',one:'☝️ ZOOM',peace:'✌️ SEPARAR',thumb:'👍 RESET'};
+  el.textContent=map[g]||'';
+  el.classList.toggle('show',!!map[g]);
+}
+
+function toggleCam(){
+  handActive=!handActive;
+  const btn=document.getElementById('bcam'),vc=document.getElementById('vcam'),hc=document.getElementById('hcur');
+  if(handActive){
+    btn.textContent='⬡ Desactivar Mano'; btn.classList.add('on');
+    vc.classList.add('on'); hc.style.display='block';
+    startHands();
+  } else {
+    btn.textContent='⬡ Activar Mano'; btn.classList.remove('on');
+    vc.classList.remove('on'); hc.style.display='none';
+    document.getElementById('gind').classList.remove('show');
+    if(camInst) camInst.stop();
+  }
+}
+
+function startHands(){
+  const vid=document.getElementById('vvid'),cnv=document.getElementById('vcnv'),
+        ctx=cnv.getContext('2d'),cur=document.getElementById('hcur');
+  const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.65,minTrackingConfidence:.55});
+
+  hands.onResults(r=>{
+    cnv.width=vid.videoWidth||130; cnv.height=vid.videoHeight||98;
+    ctx.clearRect(0,0,cnv.width,cnv.height);
+    if(!r.multiHandLandmarks||!r.multiHandLandmarks.length){
+      lpx=null; lpy=null;
+      cur.className=''; cur.style.display='none';
+      document.getElementById('gind').classList.remove('show');
+      return;
+    }
+    cur.style.display='block';
+    const lm=r.multiHandLandmarks[0];
+    drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:'#00d4ff',lineWidth:1.5});
+    drawLandmarks(ctx,lm,{color:'#00ff88',radius:2});
+
+    const palm=lm[9];
+    cur.style.left=((1-palm.x)*innerWidth)+'px';
+    cur.style.top=(palm.y*innerHeight)+'px';
+
+    const g=classifyGesture(lm);
+    updateGestureIndicator(g);
+
+    // Update cursor style
+    cur.className='';
+    cur.classList.add(g==='one'?'zoom':g==='peace'?'peace':g==='thumb'?'thumb':'move');
+
+    // Debounce gestures (need GF consistent frames)
+    if(g===prevG) gCnt++; else { gCnt=0; prevG=g; }
+    const confirmed=gCnt>=GF;
+
+    if(g==='thumb' && confirmed && gCnt===GF){
+      // 👍 Reset
+      resetScene(activeScene);
+    } else if(g==='peace' && confirmed && gCnt===GF){
+      // ✌️ Separate
+      separateHand(activeScene);
+    } else if(g==='one' && lpx!==null){
+      // ☝️ Zoom: vertical movement of index finger
+      const dy=palm.y-lpy;
+      scenes[activeScene].tZoom=Math.max(3,Math.min(10,scenes[activeScene].tZoom+dy*5.5));
+    } else if(g==='move' && lpx!==null){
+      // ✋ Rotate
+      scenes[activeScene].tRY-=(palm.x-lpx)*3.5;
+      scenes[activeScene].tRX+=(palm.y-lpy)*2.5;
+    }
+
+    lpx=palm.x; lpy=palm.y;
+  });
+
+  camInst=new Camera(vid,{onFrame:async()=>{await hands.send({image:vid});},width:260,height:195});
+  camInst.start().catch(()=>{
+    handActive=false;
+    alert('No se pudo acceder a la cámara. Verifica los permisos del navegador.');
+  });
+}
+</script>
+
+<!-- ══════════════════════════════════════════
+     CPM SECTION — injected after 3D rockets
+     ══════════════════════════════════════════ -->
+<div class="wrap">
+<div class="cpm-section">
+
+  <div class="cpm-header">
+    <h2>⬡ Método de la Ruta Crítica (CPM)</h2>
+    <p>Proyecto Segundo Parcial · Métodos Cuantitativos · NexTech Industries</p>
+  </div>
+
+  <!-- TABS -->
+  <div class="cpm-tabs">
+    <button class="ctab active" onclick="showEx(0)">◈ Ejercicio 1 — Lanzamiento NX-Heavy</button>
+    <button class="ctab"        onclick="showEx(1)">◈ Ejercicio 2 — Certificación NX-SAT-01</button>
+  </div>
+
+  <!-- ═══════ EXERCISE 1 ═══════ -->
+  <div class="cpm-panel active" id="ex0">
+    <div class="cpm-intro">
+      <strong>Planteamiento:</strong> NexTech Industries planea el lanzamiento de un cohete NX-Heavy para llevar un satélite de comunicaciones a órbita geoestacionaria. El proceso requiere coordinar <strong>6 actividades</strong> críticas de preparación. Se determina: diagrama de red, rutas posibles, tabla de holguras y ruta crítica.
+    </div>
+
+    <!-- Activities -->
+    <div class="cpm-subtitle">Lista de Actividades</div>
+    <div style="overflow-x:auto">
+    <table class="cpm-table">
+      <thead><tr><th>Act.</th><th>Descripción</th><th>Predecesora</th><th>Tiempo</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td>Ensamblaje del cohete NX-Heavy</td><td>—</td><td>5 días</td></tr>
+        <tr><td>B</td><td>Integración del satélite de carga</td><td>—</td><td>3 días</td></tr>
+        <tr><td>C</td><td>Pruebas de sistemas de propulsión</td><td>A</td><td>4 días</td></tr>
+        <tr><td>D</td><td>Carga de combustible criogénico</td><td>A, B</td><td>2 días</td></tr>
+        <tr><td>E</td><td>Revisión final de ingeniería</td><td>B</td><td>6 días</td></tr>
+        <tr><td>F</td><td>Lanzamiento y separación orbital</td><td>C, D, E</td><td>1 día</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <!-- Network diagram -->
+    <div class="cpm-subtitle">Diagrama de Red</div>
+    <div class="network-wrap">
+      <svg id="net0" viewBox="0 0 680 280" width="680" height="280" style="font-family:'Exo 2',sans-serif;">
+        <defs>
+          <marker id="arr0" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#4a7a9b"/>
+          </marker>
+          <marker id="arrC0" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#00ff88"/>
+          </marker>
+        </defs>
+        <!-- Regular arrows -->
+        <g id="arrows0" stroke="#4a7a9b" stroke-width="1.5" fill="none" marker-end="url(#arr0)">
+          <!-- A: N1→N2 -->
+          <line x1="80" y1="100" x2="220" y2="100"/>
+          <!-- B: N1→N3 -->
+          <line x1="80" y1="100" x2="220" y2="200"/>
+          <!-- D: N2,N3→N5 -->
+          <line x1="280" y1="100" x2="415" y2="185"/>
+          <line x1="280" y1="200" x2="415" y2="190"/>
+          <!-- C: N2→N4 -->
+          <line x1="280" y1="100" x2="415" y2="60"/>
+          <!-- F: N4,N5→N6 -->
+          <line x1="475" y1="60"  x2="590" y2="138"/>
+          <line x1="475" y1="190" x2="592" y2="145"/>
+        </g>
+        <!-- Critical arrows (green) -->
+        <g id="critArrows0" stroke="#00ff88" stroke-width="2" fill="none" marker-end="url(#arrC0)" opacity="0" style="transition:opacity .5s">
+          <!-- B: N1→N3 -->
+          <line x1="80" y1="100" x2="220" y2="200"/>
+          <!-- E: N3→N5 -->
+          <line x1="280" y1="200" x2="415" y2="195"/>
+          <!-- F: N5→N6 -->
+          <line x1="475" y1="190" x2="592" y2="145"/>
+          <!-- A: N1→N2 (also critical) -->
+          <line x1="80" y1="100" x2="220" y2="100"/>
+          <!-- C: N2→N4 (also critical) -->
+          <line x1="280" y1="100" x2="415" y2="60"/>
+          <!-- F from N4 -->
+          <line x1="475" y1="60"  x2="590" y2="138"/>
+        </g>
+        <!-- Activity labels on arrows -->
+        <g fill="#8abbc8" font-size="12">
+          <text x="142" y="90">A (5)</text>
+          <text x="125" y="168">B (3)</text>
+          <text x="330" y="75">C (4)</text>
+          <text x="330" y="128">D (2)</text>
+          <text x="320" y="215">E (6)</text>
+          <text x="530" y="128">F (1)</text>
+        </g>
+        <!-- Nodes -->
+        <g id="nodes0">
+          <!-- N1 Inicio -->
+          <g class="node0" data-n="0">
+            <circle cx="60" cy="100" r="28" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+            <line x1="32" y1="100" x2="88" y2="100" stroke="#4a7a9b" stroke-width="1"/>
+            <text x="60" y="96" text-anchor="middle" fill="#e8f4f8" font-size="11" font-weight="bold">0</text>
+            <text x="60" y="112" text-anchor="middle" fill="#e8f4f8" font-size="11">0</text>
+            <text x="60" y="142" text-anchor="middle" fill="#4a7a9b" font-size="10">Inicio</text>
+          </g>
+          <!-- N2 Fin A -->
+          <g class="node0" data-n="1">
+            <circle cx="250" cy="100" r="28" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+            <line x1="222" y1="100" x2="278" y2="100" stroke="#4a7a9b" stroke-width="1"/>
+            <text x="250" y="96" text-anchor="middle" fill="#e8f4f8" font-size="11" font-weight="bold">5</text>
+            <text x="250" y="112" text-anchor="middle" fill="#e8f4f8" font-size="11">5</text>
+            <text x="250" y="142" text-anchor="middle" fill="#4a7a9b" font-size="10">Fin A</text>
+          </g>
+          <!-- N3 Fin B -->
+          <g class="node0" data-n="2">
+            <circle cx="250" cy="200" r="28" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+            <line x1="222" y1="200" x2="278" y2="200" stroke="#4a7a9b" stroke-width="1"/>
+            <text x="250" y="196" text-anchor="middle" fill="#e8f4f8" font-size="11" font-weight="bold">3</text>
+            <text x="250" y="212" text-anchor="middle" fill="#e8f4f8" font-size="11">3</text>
+            <text x="250" y="242" text-anchor="middle" fill="#4a7a9b" font-size="10">Fin B</text>
+          </g>
+          <!-- N4 Fin C -->
+          <g class="node0" data-n="3">
+            <circle cx="445" cy="55" r="28" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+            <line x1="417" y1="55" x2="473" y2="55" stroke="#4a7a9b" stroke-width="1"/>
+            <text x="445" y="51" text-anchor="middle" fill="#e8f4f8" font-size="11" font-weight="bold">9</text>
+            <text x="445" y="67" text-anchor="middle" fill="#e8f4f8" font-size="11">15</text>
+            <text x="445" y="96" text-anchor="middle" fill="#4a7a9b" font-size="10">Fin C</text>
+          </g>
+          <!-- N5 Fin D/E -->
+          <g class="node0" data-n="4">
+            <circle cx="445" cy="190" r="28" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+            <line x1="417" y1="190" x2="473" y2="190" stroke="#4a7a9b" stroke-width="1"/>
+            <text x="445" y="186" text-anchor="middle" fill="#e8f4f8" font-size="11" font-weight="bold">15</text>
+            <text x="445" y="202" text-anchor="middle" fill="#e8f4f8" font-size="11">15</text>
+            <text x="445" y="232" text-anchor="middle" fill="#4a7a9b" font-size="10">Fin D/E</text>
+          </g>
+          <!-- N6 Final -->
+          <g class="node0" data-n="5">
+            <circle cx="615" cy="143" r="28" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+            <line x1="587" y1="143" x2="643" y2="143" stroke="#4a7a9b" stroke-width="1"/>
+            <text x="615" y="139" text-anchor="middle" fill="#e8f4f8" font-size="11" font-weight="bold">16</text>
+            <text x="615" y="155" text-anchor="middle" fill="#e8f4f8" font-size="11">16</text>
+            <text x="615" y="183" text-anchor="middle" fill="#4a7a9b" font-size="10">Final</text>
+          </g>
+        </g>
+        <!-- E arrow (B→N5, the real critical one, drawn last to be on top) -->
+        <line x1="280" y1="200" x2="415" y2="190" stroke="#4a7a9b" stroke-width="1.5" fill="none" marker-end="url(#arr0)"/>
+        <text x="338" y="202" fill="#8abbc8" font-size="12">E (6)</text>
+      </svg>
+      <div class="step-controls">
+        <button class="step-btn" id="s0prev" onclick="step0(-1)" disabled>← Anterior</button>
+        <span class="step-lbl" id="s0lbl">Paso 1 / 4 — Red base</span>
+        <button class="step-btn" id="s0next" onclick="step0(1)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Routes -->
+    <div class="cpm-subtitle">Rutas Posibles</div>
+    <div class="routes-grid">
+      <div class="route-card"><div class="route-path">A → C → F</div><div class="route-dur">5 + 4 + 1 = <strong>10 días</strong></div></div>
+      <div class="route-card"><div class="route-path">A → D → F</div><div class="route-dur">5 + 2 + 1 = <strong>8 días</strong></div></div>
+      <div class="route-card"><div class="route-path">B → D → F</div><div class="route-dur">3 + 2 + 1 = <strong>6 días</strong></div></div>
+      <div class="route-card cr"><div class="route-path">B → E → F <span style="color:var(--accent3)">★</span></div><div class="route-dur">3 + 6 + 1 = <strong>10 días</strong></div></div>
+    </div>
+    <div style="font-size:.62rem;color:var(--muted);margin:5px 0 12px;padding-left:4px;">
+      * A→C→F y B→E→F empatan con 10 días. La ruta crítica se confirma revisando holguras individuales.
+    </div>
+
+    <!-- Slack table -->
+    <div class="cpm-subtitle">Tabla de Holguras</div>
+    <div style="overflow-x:auto">
+    <table class="cpm-table">
+      <thead><tr><th>Act.</th><th>T. Final</th><th>T. Inicial</th><th>Duración</th><th>Holgura</th><th>¿Crítica?</th></tr></thead>
+      <tbody>
+        <tr class="crit-row"><td><strong>A</strong></td><td>5</td><td>0</td><td>5</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>B</strong></td><td>9</td><td>3</td><td>3</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>C</strong></td><td>9</td><td>5</td><td>4</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr><td>D</td><td>15</td><td>7</td><td>2</td><td>6</td><td><span class="badge no">No crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>E</strong></td><td>15</td><td>9</td><td>6</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>F</strong></td><td>16</td><td>15</td><td>1</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div style="font-size:.61rem;color:var(--muted);margin-top:5px;padding-left:4px;">Fórmula: Holgura = T. Final − (T. Inicial + Duración)</div>
+
+    <!-- Result -->
+    <div class="critical-box">
+      <div class="cico">🚀</div>
+      <div>
+        <h3>Ruta Crítica — B → E → F</h3>
+        <p>Duración mínima del proyecto: <strong>10 días</strong><br>
+        Cuello de botella: <strong>Revisión final de ingeniería (E)</strong> — 6 días sin margen.<br>
+        Actividad con mayor holgura: <strong>D (6 días)</strong> — puede retrasarse sin afectar el lanzamiento.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ EXERCISE 2 ═══════ -->
+  <div class="cpm-panel" id="ex1">
+    <div class="cpm-intro">
+      <strong>Planteamiento:</strong> NexTech Industries debe obtener la certificación de la agencia espacial para operar su nuevo satélite <strong>NX-SAT-01</strong>. El proceso involucra <strong>7 actividades</strong> interdependientes. Se determina: diagrama de red, rutas posibles, tabla de holguras y ruta crítica.
+    </div>
+
+    <!-- Activities -->
+    <div class="cpm-subtitle">Lista de Actividades</div>
+    <div style="overflow-x:auto">
+    <table class="cpm-table">
+      <thead><tr><th>Act.</th><th>Descripción</th><th>Predecesora</th><th>Tiempo</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td>Documentación técnica del satélite</td><td>—</td><td>3 sem</td></tr>
+        <tr><td>B</td><td>Pruebas de radiofrecuencia</td><td>A</td><td>4 sem</td></tr>
+        <tr><td>C</td><td>Análisis de interferencia orbital</td><td>A</td><td>2 sem</td></tr>
+        <tr><td>D</td><td>Revisión de seguridad y debris</td><td>B</td><td>3 sem</td></tr>
+        <tr><td>E</td><td>Aprobación de frecuencias ITU</td><td>B, C</td><td>5 sem</td></tr>
+        <tr><td>F</td><td>Auditoría de estación terrena</td><td>C</td><td>2 sem</td></tr>
+        <tr><td>G</td><td>Certificado final de operación</td><td>D, E, F</td><td>1 sem</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <!-- Network diagram -->
+    <div class="cpm-subtitle">Diagrama de Red</div>
+    <div class="network-wrap">
+      <svg id="net1" viewBox="0 0 740 300" width="740" height="300" style="font-family:'Exo 2',sans-serif;">
+        <defs>
+          <marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#4a7a9b"/>
+          </marker>
+          <marker id="arrC1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#00ff88"/>
+          </marker>
+        </defs>
+        <!-- Regular arrows -->
+        <g stroke="#4a7a9b" stroke-width="1.5" fill="none" marker-end="url(#arr1)">
+          <line x1="80" y1="150" x2="210" y2="100"/><!-- A→B -->
+          <line x1="80" y1="150" x2="210" y2="210"/><!-- A→C -->
+          <line x1="270" y1="100" x2="390" y2="70"/><!-- B→D -->
+          <line x1="270" y1="100" x2="390" y2="150"/><!-- B→E -->
+          <line x1="270" y1="210" x2="390" y2="155"/><!-- C→E -->
+          <line x1="270" y1="210" x2="390" y2="240"/><!-- C→F -->
+          <line x1="450" y1="70"  x2="570" y2="148"/><!-- D→G -->
+          <line x1="450" y1="150" x2="570" y2="152"/><!-- E→G -->
+          <line x1="450" y1="240" x2="570" y2="157"/><!-- F→G -->
+        </g>
+        <!-- Critical arrows (green) -->
+        <g id="critArrows1" stroke="#00ff88" stroke-width="2" fill="none" marker-end="url(#arrC1)" opacity="0" style="transition:opacity .5s">
+          <line x1="80"  y1="150" x2="210" y2="100"/><!-- A→B -->
+          <line x1="270" y1="100" x2="390" y2="150"/><!-- B→E -->
+          <line x1="450" y1="150" x2="570" y2="152"/><!-- E→G -->
+        </g>
+        <!-- Labels -->
+        <g fill="#8abbc8" font-size="11">
+          <text x="120" y="112">A (3)</text>
+          <text x="120" y="198">A (3)</text>
+          <text x="300" y="62">B (4)</text>
+          <text x="305" y="118">B→E</text>
+          <text x="295" y="195">C (2)</text>
+          <text x="295" y="248">C→F</text>
+          <text x="360" y="60">D (3)</text>
+          <text x="398" y="148">E (5)</text>
+          <text x="390" y="255">F (2)</text>
+          <text x="508" y="140">G (1)</text>
+        </g>
+        <!-- Nodes -->
+        <g>
+          <!-- N1 Inicio -->
+          <circle cx="60" cy="150" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="34" y1="150" x2="86" y2="150" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="60" y="146" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">0</text>
+          <text x="60" y="160" text-anchor="middle" fill="#e8f4f8" font-size="10">0</text>
+          <text x="60" y="188" text-anchor="middle" fill="#4a7a9b" font-size="9">Inicio</text>
+          <!-- N2 Fin A -->
+          <circle cx="240" cy="100" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="214" y1="100" x2="266" y2="100" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="240" y="96" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">3</text>
+          <text x="240" y="110" text-anchor="middle" fill="#e8f4f8" font-size="10">3</text>
+          <text x="240" y="136" text-anchor="middle" fill="#4a7a9b" font-size="9">Fin A</text>
+          <!-- N3 Fin B -->
+          <circle cx="420" cy="70" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="394" y1="70" x2="446" y2="70" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="420" y="66" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">7</text>
+          <text x="420" y="80" text-anchor="middle" fill="#e8f4f8" font-size="10">7</text>
+          <text x="420" y="105" text-anchor="middle" fill="#4a7a9b" font-size="9">Fin B</text>
+          <!-- N4 Fin C -->
+          <circle cx="240" cy="220" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="214" y1="220" x2="266" y2="220" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="240" y="216" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">5</text>
+          <text x="240" y="230" text-anchor="middle" fill="#e8f4f8" font-size="10">10</text>
+          <text x="240" y="256" text-anchor="middle" fill="#4a7a9b" font-size="9">Fin C</text>
+          <!-- N5 Fin D/E/F -->
+          <circle cx="595" cy="155" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="569" y1="155" x2="621" y2="155" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="595" y="151" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">12</text>
+          <text x="595" y="165" text-anchor="middle" fill="#e8f4f8" font-size="10">12</text>
+          <text x="595" y="190" text-anchor="middle" fill="#4a7a9b" font-size="9">Fin E</text>
+          <!-- N6 Fin E (B→E node) -->
+          <circle cx="420" cy="155" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="394" y1="155" x2="446" y2="155" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="420" y="151" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">12</text>
+          <text x="420" y="165" text-anchor="middle" fill="#e8f4f8" font-size="10">12</text>
+          <text x="420" y="190" text-anchor="middle" fill="#4a7a9b" font-size="9">Fin B/E</text>
+          <!-- N7 Fin F -->
+          <circle cx="420" cy="248" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="394" y1="248" x2="446" y2="248" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="420" y="244" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">7</text>
+          <text x="420" y="258" text-anchor="middle" fill="#e8f4f8" font-size="10">12</text>
+          <text x="420" y="283" text-anchor="middle" fill="#4a7a9b" font-size="9">Fin F</text>
+          <!-- N8 Final -->
+          <circle cx="680" cy="155" r="26" fill="#070d17" stroke="#4a7a9b" stroke-width="1.5"/>
+          <line x1="654" y1="155" x2="706" y2="155" stroke="#4a7a9b" stroke-width="1"/>
+          <text x="680" y="151" text-anchor="middle" fill="#e8f4f8" font-size="10" font-weight="bold">13</text>
+          <text x="680" y="165" text-anchor="middle" fill="#e8f4f8" font-size="10">13</text>
+          <text x="680" y="190" text-anchor="middle" fill="#4a7a9b" font-size="9">Final</text>
+        </g>
+        <!-- D arrow from N3 to N5 -->
+        <line x1="446" y1="70" x2="567" y2="148" stroke="#4a7a9b" stroke-width="1.5" fill="none" marker-end="url(#arr1)"/>
+        <!-- F arrow from N7 to N8 -->
+        <line x1="446" y1="248" x2="652" y2="160" stroke="#4a7a9b" stroke-width="1.5" fill="none" marker-end="url(#arr1)"/>
+        <!-- G arrow N5→N8 -->
+        <line x1="621" y1="155" x2="654" y2="155" stroke="#4a7a9b" stroke-width="1.5" fill="none" marker-end="url(#arr1)"/>
+        <text x="635" y="147" fill="#8abbc8" font-size="11">G (1)</text>
+      </svg>
+      <div class="step-controls">
+        <button class="step-btn" id="s1prev" onclick="step1(-1)" disabled>← Anterior</button>
+        <span class="step-lbl" id="s1lbl">Paso 1 / 4 — Red base</span>
+        <button class="step-btn" id="s1next" onclick="step1(1)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Routes -->
+    <div class="cpm-subtitle">Rutas Posibles</div>
+    <div class="routes-grid">
+      <div class="route-card"><div class="route-path">A → B → D → G</div><div class="route-dur">3+4+3+1 = <strong>11 sem</strong></div></div>
+      <div class="route-card cr"><div class="route-path">A → B → E → G <span style="color:var(--accent3)">★</span></div><div class="route-dur">3+4+5+1 = <strong>13 sem</strong></div></div>
+      <div class="route-card"><div class="route-path">A → C → E → G</div><div class="route-dur">3+2+5+1 = <strong>11 sem</strong></div></div>
+      <div class="route-card"><div class="route-path">A → C → F → G</div><div class="route-dur">3+2+2+1 = <strong>8 sem</strong></div></div>
+    </div>
+
+    <!-- Slack table -->
+    <div class="cpm-subtitle">Tabla de Holguras</div>
+    <div style="overflow-x:auto">
+    <table class="cpm-table">
+      <thead><tr><th>Act.</th><th>T. Final</th><th>T. Inicial</th><th>Duración</th><th>Holgura</th><th>¿Crítica?</th></tr></thead>
+      <tbody>
+        <tr class="crit-row"><td><strong>A</strong></td><td>3</td><td>0</td><td>3</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>B</strong></td><td>7</td><td>3</td><td>4</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr><td>C</td><td>10</td><td>3</td><td>2</td><td>5</td><td><span class="badge no">No crítica</span></td></tr>
+        <tr><td>D</td><td>12</td><td>7</td><td>3</td><td>2</td><td><span class="badge no">No crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>E</strong></td><td>12</td><td>7</td><td>5</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+        <tr><td>F</td><td>12</td><td>5</td><td>2</td><td>5</td><td><span class="badge no">No crítica</span></td></tr>
+        <tr class="crit-row"><td><strong>G</strong></td><td>13</td><td>12</td><td>1</td><td><strong>0</strong></td><td><span class="badge crit">★ Crítica</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div style="font-size:.61rem;color:var(--muted);margin-top:5px;padding-left:4px;">Fórmula: Holgura = T. Final − (T. Inicial + Duración)</div>
+
+    <!-- Result -->
+    <div class="critical-box">
+      <div class="cico">🛰️</div>
+      <div>
+        <h3>Ruta Crítica — A → B → E → G</h3>
+        <p>Duración mínima del proyecto: <strong>13 semanas</strong><br>
+        Cuello de botella: <strong>Aprobación de frecuencias ITU (E)</strong> — 5 semanas sin margen.<br>
+        Actividades con mayor holgura: <strong>C y F (5 semanas c/u)</strong> — pueden reprogramarse libremente.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conclusions -->
+  <div class="cpm-subtitle" style="margin-top:20px;">Conclusiones del CPM</div>
+  <div style="overflow-x:auto">
+  <table class="cpm-table">
+    <thead><tr><th>Ejercicio 1 — Lanzamiento NX-Heavy</th><th>Ejercicio 2 — Certificación NX-SAT-01</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          Ruta crítica: <strong>B → E → F</strong><br>
+          Duración mínima: <strong>10 días</strong><br>
+          Cuello de botella: Revisión de ingeniería (E)<br>
+          Mayor holgura: <strong>D — 6 días</strong>
+        </td>
+        <td>
+          Ruta crítica: <strong>A → B → E → G</strong><br>
+          Duración mínima: <strong>13 semanas</strong><br>
+          Cuello de botella: Aprobación ITU (E)<br>
+          Mayor holgura: <strong>C y F — 5 sem c/u</strong>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+</div><!-- /cpm-section -->
+</div><!-- /wrap -->
+
+<script>
+// ── Tab switching ──
+function showEx(i){
+  document.querySelectorAll('.cpm-panel').forEach((p,j)=>p.classList.toggle('active',j===i));
+  document.querySelectorAll('.ctab').forEach((t,j)=>t.classList.toggle('active',j===i));
+}
+
+// ── Step-through animation for diagram 0 ──
+const steps0=[
+  {lbl:'Paso 1 / 4 — Red base: nodos y conexiones',     crit:false, highlight:[]},
+  {lbl:'Paso 2 / 4 — Tiempos tempranos calculados',      crit:false, highlight:[1,2,3,4,5]},
+  {lbl:'Paso 3 / 4 — Tiempos tardíos y holguras',        crit:false, highlight:[3,4]},
+  {lbl:'Paso 4 / 4 — Ruta crítica resaltada ★',          crit:true,  highlight:[]},
+];
+let si0=0;
+function step0(d){
+  si0=Math.max(0,Math.min(steps0.length-1,si0+d));
+  const s=steps0[si0];
+  document.getElementById('s0lbl').textContent=s.lbl;
+  document.getElementById('s0prev').disabled=si0===0;
+  document.getElementById('s0next').disabled=si0===steps0.length-1;
+  document.getElementById('critArrows0').style.opacity=s.crit?'1':'0';
+  // Highlight specific nodes
+  document.querySelectorAll('#net0 .node0').forEach((n,i)=>{
+    const circle=n.querySelector('circle');
+    if(s.highlight.includes(i)){
+      circle.setAttribute('stroke',s.crit?'#00ff88':'#00d4ff');
+      circle.setAttribute('stroke-width','2.5');
+    } else {
+      circle.setAttribute('stroke','#4a7a9b');
+      circle.setAttribute('stroke-width','1.5');
+    }
+  });
+}
+
+// ── Step-through animation for diagram 1 ──
+const steps1=[
+  {lbl:'Paso 1 / 4 — Red base: nodos y conexiones',    crit:false},
+  {lbl:'Paso 2 / 4 — Tiempos tempranos calculados',     crit:false},
+  {lbl:'Paso 3 / 4 — Tiempos tardíos y holguras',       crit:false},
+  {lbl:'Paso 4 / 4 — Ruta crítica resaltada ★',         crit:true},
+];
+let si1=0;
+function step1(d){
+  si1=Math.max(0,Math.min(steps1.length-1,si1+d));
+  const s=steps1[si1];
+  document.getElementById('s1lbl').textContent=s.lbl;
+  document.getElementById('s1prev').disabled=si1===0;
+  document.getElementById('s1next').disabled=si1===steps1.length-1;
+  document.getElementById('critArrows1').style.opacity=s.crit?'1':'0';
+}
+</script>
+</body>
+</html>
